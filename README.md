@@ -1,4 +1,4 @@
-# FastAPI Application with Docker - PLN Wallet
+# FastAPI Application with Docker - Wallet PLN
 
 This project provides a FastAPI application that allows users to manage a wallet with multiple currencies, track exchange rates, and perform conversions between currencies, with Redis integration for data caching and PostgreSQL for persistent storage.
 
