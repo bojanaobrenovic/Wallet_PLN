@@ -55,7 +55,7 @@ You can explore and test all API endpoints interactively using Swagger at:
 
 ### Step 1:
 First, clone this repository to your local machine.
-#### git clone git@github.com:bojanaobrenovic/PLNConvert.git
+#### git clone git@github.com:bojanaobrenovic/Wallet_PLN.git
 #### navgate to the folder api: Wallet_PLN/api
 
 ### Step 2:
