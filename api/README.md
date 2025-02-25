@@ -41,7 +41,7 @@ The application uses the NBP API, with the following endpoint:
 
 ### **Swagger Documentation**
 
-You can explore and test all API endpoints interactively using Swagger at:
+You can explore and test all API endpoints interactively (with authorization) using Swagger at:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
 
