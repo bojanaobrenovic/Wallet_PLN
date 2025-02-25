@@ -46,10 +46,10 @@ You can explore and test all API endpoints interactively using Swagger at:
 - [http://localhost:8000/docs](http://localhost:8000/docs)
 
 # Prerequisites
-- Docker
+- Docker 
 - Docker Compose
 - PostgreSQL >= 12.0
-- Python 3.10 (optional, if you want to run outside Docker)
+- Python 3.10
 
 ## Setup
 
