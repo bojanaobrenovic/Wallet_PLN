@@ -180,7 +180,7 @@ def get_balance_report(user_wallets, exchange_rates, effective_date):
 
         report_list.append({
             "currency": currency,
-            "amount": amount, #useful info in report
+            #"amount": amount, #useful info in report
             "value_pln": round(pln_value,2) #Two decimal places are correct for currency conversions
         })
 
