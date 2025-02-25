@@ -19,7 +19,7 @@ The application uses the NBP API, with the following endpoint:
 #### Details:
 - Provides the latest  available exchange rates for various currencies against the Polish złoty (PLN);
 - Returns the "ask" rate for conversions;
-- Available every day
+- Available every day.
 
 ### API Endpoints
 ### 1. **User Endpoints**
