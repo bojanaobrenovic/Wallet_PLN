@@ -4,6 +4,8 @@
 # Ignore the virtual environment
 .venv
 
+.env
+
 # Ignore .env file with sensitive data
 wallet_pln/.env
 
