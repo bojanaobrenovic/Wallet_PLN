@@ -43,7 +43,7 @@ The application uses the NBP API, with the following endpoint:
 
 You can explore and test all API endpoints interactively using Swagger at:
 
-- [http://localhost:8000/docs]
+- [FastAPI Docs](http://localhost:8000/docs)
 
 # Prerequisites
 - Docker 
