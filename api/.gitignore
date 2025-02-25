@@ -1,11 +1,11 @@
 # created by virtualenv automatically
-*
+../.Rhistory
 
 # Ignore the virtual environment
 .venv
 
 # Ignore .env file with sensitive data
-.env
+wallet_pln/.env
 
 # Ignore PyCache and build files
 __pycache__/
