@@ -55,11 +55,11 @@ You can explore and test all API endpoints interactively using Swagger at:
 
 ### Step 1:
 First, clone this repository to your local machine.
-#### git clone git@github.com:bojanaobrenovic/PLNConvert.git
-#### navgate to the folder api: PLNConvert/api
+#### git clone git@github.com:bojanaobrenovic/Wallet_PLN.git
+#### navgate to the folder api: Wallet_PLN/api
 
 ### Step 2:
-Create a .env file in the project root/api (PLNConvert/api) to store the environment variables.
+Create a .env file in the folder Wallet_PLN/api.
 
 #### Add theese variables:
 - SECRET_KEY = "your_secret_key" #secret_key = secrets.token_hex(32)
