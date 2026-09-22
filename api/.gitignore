@@ -4,6 +4,8 @@
 # Ignore the virtual environment
 .venv
 
+.wallet_api_refactor
+
 .env
 
 # Ignore .env file with sensitive data
