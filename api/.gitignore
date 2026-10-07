@@ -3,18 +3,34 @@
 
 # Ignore the virtual environment
 .venv
+venv/
+*_venv/
+wallet_api_refactor/
+pyvenv.cfg
 
-.wallet_api_refactor
 
 .env
+*.env
+!.env.example
 
-# Ignore .env file with sensitive data
-wallet_pln/.env
 
-# Ignore PyCache and build files
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 dist/
 build/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# R (RStudio)
+.Rhistory
