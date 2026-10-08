@@ -1,21 +1,12 @@
 import os
 from datetime import datetime, timedelta
 
-from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from fastapi import HTTPException
 
-#Loading and setting security parameters for authentication
-load_dotenv()
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-
-if not SECRET_KEY:
-    raise ValueError("SECRET_KEY not set. Check the .env file or Docker environment variables.")
+from app.core.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM
 
 #Model for the user and JWT payload
 class User(BaseModel):

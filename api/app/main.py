@@ -14,11 +14,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from . import models
-from . import security
-from . import database
+from .core import security
+from .core.database import engine, Base, get_db
+from .core.security import verify_token
 
-from .database import engine, Base, get_db
-from .security import verify_token
 
 from .swagger_docs import *
 
@@ -200,9 +199,9 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 #Endpoint for login - returns only access token
-@app.post("/login", response_model=security.Token,**login_docs)
+@app.post("/login", response_model=security.Token, **login_docs)
 def login_for_access_token(
-        form_data: security.UserLogin, db: Session = Depends(database.get_db)):
+        form_data: security.UserLogin, db: Session = Depends(get_db)):
 
     user = get_user(db, form_data.username)
     if not user or not security.verify_password(form_data.password, user.password_hash):
@@ -279,7 +278,7 @@ async def add_to_wallet(currency: str, amount: float, db: Session = Depends(get_
 
 #Substracting amount in different currencies from the wallet
 @app.post("/wallet/sub/{currency}/{amount}", tags=["Wallet"],**wallet_sub)
-async def subtract_from_wallet(currency: str, amount: float, db: Session = Depends(database.get_db),
+async def subtract_from_wallet(currency: str, amount: float, db: Session = Depends(get_db),
                                current_user: models.User = Depends(get_current_user)):
 
     #Checking if the currency is in the list of predefined currencies
