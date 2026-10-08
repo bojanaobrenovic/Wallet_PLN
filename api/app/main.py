@@ -22,7 +22,8 @@ from .security import verify_token
 
 from .swagger_docs import *
 
-import redis
+from .rates.router import router as rates_router
+from .rates.service import get_exchange_rates
 
 #Email support in case of errors
 SUPPORT_EMAIL = "bojana.n.obrenovic@gmail.com"
@@ -57,6 +58,7 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi
+app.include_router(rates_router)
 
 #Creating tables in the database
 Base.metadata.create_all(bind=engine)
@@ -64,13 +66,8 @@ Base.metadata.create_all(bind=engine)
 #Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-#Initializing the Redis connection
-redis_client = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
-#redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-
 #Supported currencies and exchange rate URLs
 from .models import SUPPORTED_CURRENCIES
-NBP_API_URL = "https://api.nbp.pl/api/exchangerates/tables/c"
 
 class UserCreate(BaseModel):
     '''Model for data entry during user registration'''
@@ -104,63 +101,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
     return user
-
-
-def get_exchange_rates():
-
-    '''Fetches exchange rates from the NBP API and caches them in Redis for 24 hours.
-    After 24 hours, the data is refreshed by fetching new rates from the API to ensure accuracy while maintaining availability if the API is down.
-    If the API is unavailable, the system uses the last saved exchange rates from the cache.
-    '''
-
-    today = date.today()
-    redis_key = f"exchange_rates:{today.isoformat()}"
-
-    #Checking the Redis cache
-    cached_data = redis_client.get(redis_key)
-    if cached_data:
-        data = json.loads(cached_data)
-        return data["rates"], data["effectiveDate"]
-
-    #Attempting to retrieve data from API
-    try:
-        response = requests.get(NBP_API_URL)
-        response.raise_for_status()
-
-    except requests.RequestException:
-        #If the API is unavailable, try to use the cached data
-        last_available_key = redis_client.keys("exchange_rates:*")
-        if last_available_key:
-            last_available_key = sorted(last_available_key)[-1]
-            cached_data=redis_client.get(last_available_key)
-            if cached_data:
-                data=json.loads(cached_data)
-                return data["rates"],data["effectiveDate"]
-        else:
-            raise HTTPException(
-                #If the NBP API is unavailable and there is no data in the redis cached
-                status_code=500,
-                    detail=f"Currently, it is not possible to access the Polish National Bank's public API - NBP. "
-                           f"Please contact support via email: {SUPPORT_EMAIL}"
-            )
-
-    #Retrieving relevant data from the API response
-    data_api = response.json()[0]
-    effectivedate = data_api["effectiveDate"]
-    rates_data = data_api["rates"]
-    rate_list = {rate['code']: rate['ask'] for rate in rates_data} #ask values need to use
-
-    #Caching data in Redis
-    cache_payload = {"rates": rate_list, "effectiveDate": effectivedate}
-    redis_client.setex(redis_key, 86400, json.dumps(cache_payload))
-
-    #Deleting old cache (all keys that are not for today's date)
-    all_keys = redis_client.keys("exchange_rates:*")
-    for key in all_keys:
-        if key != redis_key:
-            redis_client.delete(key)
-
-    return rate_list, effectivedate
 
 def get_balance_report(user_wallets, exchange_rates, effective_date):
 
@@ -290,24 +230,6 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
         "username": current_user.username,
         "balance in PLN": report["total_pln"]
     }
-
-#Returns available exchange rates from NBP
-@app.get("/exchange_rates", **exchange_rates_docs)
-def get_supported_exrate():
-    exchange_rates, effective_date = get_exchange_rates()
-    return {
-        "message": "Available exchange rate list",
-        "exchange_rates": exchange_rates,
-        "effective_date": effective_date
-    }
-
-#Returns available currencies from API of NBL Bank
-@app.get("/currencies", **currencies_docs)
-def get_currencies():
-    exchange_rates, effective_date = get_exchange_rates()
-    currency_list = list(exchange_rates.keys())
-    return {"available_currencies": currency_list,
-            "effective_date": effective_date}
 
 #Return the balance for each currency along with the user's overall total balance
 @app.get("/wallet", tags=["Wallet"], **wallet_report)

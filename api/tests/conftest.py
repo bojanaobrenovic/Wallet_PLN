@@ -15,7 +15,6 @@ from app.database import Base, get_db
 from app.main import app
 
 
-
 @pytest.fixture
 def db_session():
     """Svaki test dobija svoju, potpuno praznu bazu u memoriji."""
