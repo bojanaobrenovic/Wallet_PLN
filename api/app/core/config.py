@@ -4,12 +4,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def _require_env(name: str) -> str:
-    """Silences a required env variable, returns a clear error if it fails! """
+    """Silences a required env variable, returns a clear error if it fails!"""
     value = os.getenv(name)
     if not value:
         raise ValueError(f"{name} is not set. Check your .env file or environmnet variables.")
     return value
+
 
 # --- Database ---
 DATABASE_URL = _require_env("DATABASE_URL")

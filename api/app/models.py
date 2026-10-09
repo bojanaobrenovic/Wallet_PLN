@@ -1,31 +1,44 @@
-from app.core.database import Base
-
-from sqlalchemy import Column, Integer, String, Float, ForeignKey,CheckConstraint
+from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
+from app.core.database import Base
 
-#Available currencies - created based on available currencies in API NLB which contain 'ask' values
-SUPPORTED_CURRENCIES = ['USD', 'AUD', 'CAD', 'EUR', 'HUF', 'CHF', 'GBP', 'JPY', 'CZK', 'DKK', 'NOK', 'SEK', 'XDR']
+# Available currencies - created based on available currencies in API NLB which contain 'ask' values
+SUPPORTED_CURRENCIES = [
+    "USD",
+    "AUD",
+    "CAD",
+    "EUR",
+    "HUF",
+    "CHF",
+    "GBP",
+    "JPY",
+    "CZK",
+    "DKK",
+    "NOK",
+    "SEK",
+    "XDR",
+]
 
-#Users
+
+# Users
 class User(Base):
-    __tablename__= "users"
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     email = Column(String(250), unique=True, nullable=False)
     username = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False) #hash password
+    password_hash = Column(String, nullable=False)  # hash password
 
     wallets = relationship("Wallet", back_populates="owner", cascade="all, delete-orphan")
-
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
 
 
-#Wallets
+# Wallets
 class Wallet(Base):
     __tablename__ = "wallets"
 
@@ -36,12 +49,13 @@ class Wallet(Base):
 
     owner = relationship("User", back_populates="wallets")
 
-
     __table_args__ = (
         CheckConstraint("amount >= 0", name="amount_non_negative"),
         CheckConstraint(f"currency IN {tuple(SUPPORTED_CURRENCIES)}", name="valid_currency"),
     )
 
     def __repr__(self):
-        return f"<Wallet(id={self.id}, user_id={self.user_id}, currency={self.currency}, amount={self.amount})>"
-
+        return (
+            f"<Wallet(id={self.id}, user_id={self.user_id},"
+            f" currency={self.currency}, amount={self.amount})>"
+        )

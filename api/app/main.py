@@ -11,7 +11,8 @@ from app.wallet.router import router as wallet_router
 
 app = FastAPI()
 
-#Settings for swagger documentation
+
+# Settings for swagger documentation
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -22,17 +23,14 @@ def custom_openapi():
         routes=app.routes,
     )
     openapi_schema["components"]["securitySchemes"] = {
-        "BearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT"
-        }
+        "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
     }
     for path in openapi_schema["paths"]:
         for method in openapi_schema["paths"][path]:
             openapi_schema["paths"][path][method]["security"] = [{"BearerAuth": []}]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
+
 
 app.openapi = custom_openapi
 
@@ -44,9 +42,9 @@ app.include_router(rates_router)
 # Creating tables in the database
 Base.metadata.create_all(bind=engine)
 
-#Check if the app is running
+
+# Check if the app is running
 @app.get("/", summary="Check if the application is running")
 def read_root():
-    '''Checking if the application is runnig.'''
+    """Checking if the application is runnig."""
     return {"message": "Welcome to PLN Wallet API."}
-

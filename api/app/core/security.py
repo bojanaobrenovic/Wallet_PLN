@@ -1,28 +1,33 @@
 from datetime import datetime, timedelta
 
+from fastapi import HTTPException
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from fastapi import HTTPException
 
-from app.core.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM
+from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 
-#Model for the user and JWT payload
+
+# Model for the user and JWT payload
 class User(BaseModel):
     username: str
 
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def get_password_hash(password: str) -> str:
-    '''Hash a plaintext password.'''
-    return pwd_context.hash(password) #hash a plaintext password
+    """Hash a plaintext password."""
+    return pwd_context.hash(password)  # hash a plaintext password
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    '''Verify a hashed password'''
+    """Verify a hashed password"""
     return pwd_context.verify(plain_password, hashed_password)
 
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    '''JWT token creation'''
+    """JWT token creation"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -34,7 +39,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 
 def verify_token(token: str):
-    '''JWT token validation'''
+    """JWT token validation"""
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -46,5 +51,5 @@ def verify_token(token: str):
         if username is None:
             raise credentials_exception
         return User(username=username)
-    except JWTError:
-        raise credentials_exception
+    except JWTError as err:
+        raise credentials_exception from err
