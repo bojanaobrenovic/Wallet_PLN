@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta
 
 from jose import JWTError, jwt
@@ -11,19 +10,6 @@ from app.core.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM
 #Model for the user and JWT payload
 class User(BaseModel):
     username: str
-
-class UserInDB(User):
-    hashed_password: str
-
-#Model for token
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-#Model for login
-class UserLogin(BaseModel):
-    username: str
-    password: str
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

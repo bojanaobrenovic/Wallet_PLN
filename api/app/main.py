@@ -24,14 +24,15 @@ from .swagger_docs import *
 from .rates.router import router as rates_router
 from .rates.service import get_exchange_rates
 
+from .auth.dependencies import get_current_user
+from .auth.router import router as auth_router
+
 #Email support in case of errors
 SUPPORT_EMAIL = "bojana.n.obrenovic@gmail.com"
 
 #FastAPI application initialization
 app = FastAPI()
 
-#OAuth2 authentication
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 #Settings for swagger documentation
 def custom_openapi():
@@ -57,49 +58,15 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi
+app.include_router(auth_router)
 app.include_router(rates_router)
 
 #Creating tables in the database
 Base.metadata.create_all(bind=engine)
 
-#Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 #Supported currencies and exchange rate URLs
 from .models import SUPPORTED_CURRENCIES
-
-class UserCreate(BaseModel):
-    '''Model for data entry during user registration'''
-    first_name: str
-    last_name: str
-    email: EmailStr
-    username: str
-    password: str
-
-def get_password_hash(password: str) -> str:
-    '''Hashes the password using bcrypt.'''
-    return pwd_context.hash(password)
-
-def get_user(db: Session, username: str):
-    '''Retrieves the user from the database based on the username.'''
-    return db.query(models.User).filter(models.User.username == username).first()
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-
-    '''Validates the JWT token and returns the currently loggedin user.
-    If the token is not valid or the user does not exist, it raises an HTTPException.'''
-
-    user_data = verify_token(token)
-
-    if not user_data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user = db.query(models.User).filter(models.User.username == user_data.username).first()
-
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-    return user
 
 def get_balance_report(user_wallets, exchange_rates, effective_date):
 
@@ -167,53 +134,6 @@ def process_wallet_update(db: Session, user_id: int, currency: str, wallet: mode
 def read_root():
     '''Checking if the application is runnig.'''
     return {"message": "Welcome to PLN Wallet API."}
-
-
-#Endpoint for registration
-@app.post("/registration", **registration_docs)
-def register(user: UserCreate, db: Session = Depends(get_db)):
-
-    existing_user = db.query(models.User).filter(or_(models.User.username == user.username, models.User.email == user.email)).first()
-
-    #Check if user with the same email and username is already exists
-    if existing_user:
-        if existing_user.username == user.username:
-            raise HTTPException(status_code=400, detail="Username already exists")
-        if existing_user.email == user.email:
-            raise HTTPException(status_code=400, detail="Email already exists")
-
-    #Create a new user
-    new_user = models.User(
-        first_name=user.first_name,
-        last_name=user.last_name,
-        email=user.email,
-        username=user.username,
-        password_hash=get_password_hash(user.password)  #Save a hashed password
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return {"message": "User successfully registered", "email": new_user.email, "user_name": new_user.username}
-
-
-#Endpoint for login - returns only access token
-@app.post("/login", response_model=security.Token, **login_docs)
-def login_for_access_token(
-        form_data: security.UserLogin, db: Session = Depends(get_db)):
-
-    user = get_user(db, form_data.username)
-    if not user or not security.verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    #Create access token
-    access_token = security.create_access_token(data={"sub": form_data.username})
-    return {"access_token": access_token, "token_type": "bearer"}
 
 #Return data about the user; also returns the total balance in the wallet (for the user)
 @app.get("/me",tags=["User"], **user_me_docs)
