@@ -75,3 +75,19 @@ def test_me_shows_total_balance(client, auth_headers, fake_rates):
 
     assert response.status_code == 200
     assert response.json()["balance in PLN"] == 425.0
+
+
+def test_subtract_whole_amount_in_parts(client, auth_headers, fake_rates):
+    """0.3 - 0.1 - 0.2 must leave exactly 0, not 'Insufficient funds'."""
+    client.post("/wallet/add/EUR/0.3", headers=auth_headers)
+    client.post("/wallet/sub/EUR/0.1", headers=auth_headers)
+
+    response = client.post("/wallet/sub/EUR/0.2", headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    assert client.get("/wallet", headers=auth_headers).json()["total_in_pln"] == 0
+
+def test_amount_with_more_than_two_decimals_is_rejected(client, auth_headers):
+    response = client.post("/wallet/add/EUR/1.234", headers=auth_headers)
+
+    assert response.status_code == 422

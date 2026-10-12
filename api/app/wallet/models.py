@@ -1,4 +1,6 @@
-from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, Integer, String
+"""Database table for wallet balances (one row per user and currency)."""
+
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -20,32 +22,13 @@ SUPPORTED_CURRENCIES = [
     "XDR",
 ]
 
-
-# Users
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    email = Column(String(250), unique=True, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)  # hash password
-
-    wallets = relationship("Wallet", back_populates="owner", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
-
-
-# Wallets
 class Wallet(Base):
     __tablename__ = "wallets"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     currency = Column(String, index=True, nullable=False)
-    amount = Column(Float, default=0.0, nullable=False)
+    amount = Column(Numeric(18, 2), default=0, nullable=False)
 
     owner = relationship("User", back_populates="wallets")
 

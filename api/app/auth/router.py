@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app import models
+from app.auth.models import User
 from app.auth.schemas import Token, UserCreate, UserLogin
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
@@ -15,15 +15,15 @@ router = APIRouter(tags=["Auth"])
 
 def get_user(db: Session, username: str):
     """Retrieves the user from the database based on the username."""
-    return db.query(models.User).filter(models.User.username == username).first()
+    return db.query(User).filter(User.username == username).first()
 
 
 @router.post("/registration", **registration_docs)
 def register(user: UserCreate, db: Session = Depends(get_db)):
 
     existing_user = (
-        db.query(models.User)
-        .filter(or_(models.User.username == user.username, models.User.email == user.email))
+        db.query(User)
+        .filter(or_(User.username == user.username, User.email == user.email))
         .first()
     )
 
@@ -35,7 +35,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Email already exists")
 
     # Create a new user
-    new_user = models.User(
+    new_user = User(
         first_name=user.first_name,
         last_name=user.last_name,
         email=user.email,

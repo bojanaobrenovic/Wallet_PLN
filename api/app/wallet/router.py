@@ -1,14 +1,16 @@
 """Wallet endpoints: show the wallet, add and subtract currency amounts."""
+from decimal import Decimal
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
-from app import models
 from app.auth.dependencies import get_current_user
+from app.auth.models import User
 from app.core.database import get_db
-from app.models import SUPPORTED_CURRENCIES
 from app.rates.service import get_exchange_rates
 from app.swagger_docs import wallet_add, wallet_report, wallet_sub
+from app.wallet.models import SUPPORTED_CURRENCIES, Wallet
 from app.wallet.service import get_balance_report, process_wallet_update
 
 router = APIRouter(tags=["Wallet"])
@@ -17,10 +19,10 @@ router = APIRouter(tags=["Wallet"])
 # Return the balance for each currency along with the user's overall total balance
 @router.get("/wallet", **wallet_report)
 def get_wallet_report(
-    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
 
-    user_wallets = db.query(models.Wallet).filter_by(user_id=current_user.id).all()
+    user_wallets = db.query(Wallet).filter_by(user_id=current_user.id).all()
 
     if not user_wallets:
         message = {
@@ -37,9 +39,9 @@ def get_wallet_report(
 @router.post("/wallet/add/{currency}/{amount}", **wallet_add)
 async def add_to_wallet(
     currency: str,
-    amount: float,
+    amount: Annotated[Decimal, Path(decimal_places=2)],
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
 
     # Checking if the currency is in the list of predefined currencies
@@ -54,12 +56,12 @@ async def add_to_wallet(
     user_id = current_user.id
 
     # user's wallet
-    wallet = db.query(models.Wallet).filter_by(user_id=user_id, currency=currency).first()
+    wallet = db.query(Wallet).filter_by(user_id=user_id, currency=currency).first()
 
     if wallet:
         wallet.amount += amount
     else:
-        wallet = models.Wallet(user_id=user_id, currency=currency, amount=amount)
+        wallet = Wallet(user_id=user_id, currency=currency, amount=amount)
         db.add(wallet)
 
     db.commit()
@@ -69,14 +71,13 @@ async def add_to_wallet(
         db, user_id, currency, wallet, f"Successfully added {amount} {currency}."
     )
 
-
 # Substracting amount in different currencies from the wallet
 @router.post("/wallet/sub/{currency}/{amount}", **wallet_sub)
 async def subtract_from_wallet(
     currency: str,
-    amount: float,
+    amount: Annotated[Decimal, Path(decimal_places=2)],
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
 
     # Checking if the currency is in the list of predefined currencies
@@ -89,7 +90,7 @@ async def subtract_from_wallet(
 
     user_id = current_user.id
 
-    wallet = db.query(models.Wallet).filter_by(user_id=user_id, currency=currency).first()
+    wallet = db.query(Wallet).filter_by(user_id=user_id, currency=currency).first()
 
     # Check if there are enough amounts to deduct from the wallet
     if not wallet or wallet.amount < amount:

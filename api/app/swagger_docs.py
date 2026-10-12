@@ -142,7 +142,7 @@ wallet_add = {
     
     ### Parameters:
     - **currency** *(str)*: The currency code (e.g., "USD", "EUR").
-    - **amount** *(float)*: The amount to add (must be greater than 0).
+    - **amount** *(decimal, max 2 decimal places)*: The amount to add (must be greater than 0).
     
     ### Example Response:
     {
@@ -176,7 +176,7 @@ wallet_sub = {
     
     ### Parameters:
     - **currency** *(str)*: The currency code (e.g., "USD", "EUR").
-    - **amount** *(float)*: The amount to add (must be greater than 0).
+    - **amount** *(decimal, max 2 decimal places)*: The amount to add (must be greater than 0).
     
     ### Example Response:
     {
