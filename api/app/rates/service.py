@@ -1,69 +1,113 @@
-"""Fetching exchange rates from the NBP API and caching them in Redis."""
+"""Exchange rates from the NBP API, cached in Redis."""
 
 import json
-from datetime import date
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from decimal import Decimal
 
 import redis
 import requests
-from fastapi import HTTPException
 
-from app.core.config import NBP_API_URL, REDIS_HOST, REDIS_PORT, SUPPORT_EMAIL
+from app.core.config import CACHE_TTL_SECONDS, NBP_API_URL
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+logger = logging.getLogger(__name__)
+
+FRESH_KEY = "nbp:rates:fresh"  # expires after CACHE_TTL_SECONDS
+LAST_GOOD_KEY = "nbp:rates:last_good"  # never expires, used when NBP is down
+LOCK_KEY = "nbp:rates:lock"  # only one request at a time refreshes from NBP
+LOCK_SECONDS = 10
+NBP_TIMEOUT_SECONDS = 5
 
 
-def get_exchange_rates():
-    """Fetches exchange rates from the NBP API and caches them in Redis for 24 hours.
-    After 24 hours, the data is refreshed by fetching new rates from the API
-    to ensure accuracy while maintaining availability if the API is down.
-    If the API is unavailable, the system uses the last saved exchange rates from the cache.
+class RatesUnavailableError(Exception):
+    """NBP is not reachable and there are no cached rates to fall back to."""
+
+
+@dataclass(frozen=True)
+class ExchangeRates:
+    """'Ask' prices in PLN for one unit of each currency, and the date they are valid for."""
+
+    rates: dict[str, Decimal]
+    effective_date: str
+
+    def to_json(self) -> str:
+        # Decimals are stored as strings, so no precision is lost in Redis
+        return json.dumps(
+            {
+                "effective_date": self.effective_date,
+                "rates": {code: str(rate) for code, rate in self.rates.items()},
+            }
+        )
+
+    @classmethod
+    def from_json(cls, raw: str) -> "ExchangeRates":
+        data = json.loads(raw)
+        return cls(
+            rates={code: Decimal(rate) for code, rate in data["rates"].items()},
+            effective_date=data["effective_date"],
+        )
+
+
+def fetch_from_nbp() -> ExchangeRates:
+    """Downloads table C (buy/sell prices) from the NBP API."""
+    response = requests.get(NBP_API_URL, timeout=NBP_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    table = response.json()[0]
+    return ExchangeRates(
+        rates={rate["code"]: Decimal(str(rate["ask"])) for rate in table["rates"]},
+        effective_date=table["effectiveDate"],
+    )
+
+
+class ExchangeRateService:
+    """Returns exchange rates, calling NBP at most once per cache period.
+
+    1. Fresh rates in the cache -> return them, NBP is not called.
+    2. No fresh rates -> download from NBP and cache them.
+    3. NBP is down -> return the last rates that were successfully downloaded.
+    4. NBP is down and nothing was ever cached -> RatesUnavailableError.
     """
 
-    today = date.today()
-    redis_key = f"exchange_rates:{today.isoformat()}"
+    def __init__(
+        self,
+        cache: redis.Redis,
+        fetch: Callable[[], ExchangeRates] = fetch_from_nbp,
+        ttl_seconds: int = CACHE_TTL_SECONDS,
+    ):
+        self.cache = cache
+        self.fetch = fetch
+        self.ttl_seconds = ttl_seconds
 
-    # Checking the Redis cache
-    cached_data = redis_client.get(redis_key)
-    if cached_data:
-        data = json.loads(cached_data)
-        return data["rates"], data["effectiveDate"]
+    def get_rates(self) -> ExchangeRates:
+        fresh = self.cache.get(FRESH_KEY)
+        if fresh:
+            return ExchangeRates.from_json(fresh)
 
-    # Attempting to retrieve data from API
-    try:
-        response = requests.get(NBP_API_URL)
-        response.raise_for_status()
+        # SET NX = "set only if it does not exist": exactly one request gets the lock
+        got_lock = self.cache.set(LOCK_KEY, "1", nx=True, ex=LOCK_SECONDS)
+        if not got_lock:
+            # Another request is already refreshing - don't hit NBP a second time
+            last_good = self.cache.get(LAST_GOOD_KEY)
+            if last_good:
+                return ExchangeRates.from_json(last_good)
 
-    except requests.RequestException as err:
-        # If the API is unavailable, try to use the cached data
-        last_available_key = redis_client.keys("exchange_rates:*")
-        if last_available_key:
-            last_available_key = sorted(last_available_key)[-1]
-            cached_data = redis_client.get(last_available_key)
-            if cached_data:
-                data = json.loads(cached_data)
-                return data["rates"], data["effectiveDate"]
+        try:
+            rates = self.fetch()
+        except (requests.RequestException, KeyError, IndexError, ValueError) as err:
+            logger.warning("NBP API is unavailable: %s", err)
+            return self._last_good_or_raise(err)
         else:
-            raise HTTPException(
-                # If the NBP API is unavailable and there is no data in the redis cached
-                status_code=500,
-                detail=f"Currently, it is not possible to access the NBP API"
-                f"Please contact support via email: {SUPPORT_EMAIL}",
-            ) from err
+            payload = rates.to_json()
+            self.cache.set(FRESH_KEY, payload, ex=self.ttl_seconds)
+            self.cache.set(LAST_GOOD_KEY, payload)
+            return rates
+        finally:
+            if got_lock:
+                self.cache.delete(LOCK_KEY)
 
-    # Retrieving relevant data from the API response
-    data_api = response.json()[0]
-    effectivedate = data_api["effectiveDate"]
-    rates_data = data_api["rates"]
-    rate_list = {rate["code"]: rate["ask"] for rate in rates_data}  # ask values need to use
-
-    # Caching data in Redis
-    cache_payload = {"rates": rate_list, "effectiveDate": effectivedate}
-    redis_client.setex(redis_key, 86400, json.dumps(cache_payload))
-
-    # Deleting old cache (all keys that are not for today's date)
-    all_keys = redis_client.keys("exchange_rates:*")
-    for key in all_keys:
-        if key != redis_key:
-            redis_client.delete(key)
-
-    return rate_list, effectivedate
+    def _last_good_or_raise(self, err: Exception) -> ExchangeRates:
+        last_good = self.cache.get(LAST_GOOD_KEY)
+        if last_good:
+            return ExchangeRates.from_json(last_good)
+        raise RatesUnavailableError("NBP API is unavailable and no rates are cached") from err

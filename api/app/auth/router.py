@@ -22,9 +22,7 @@ def get_user(db: Session, username: str):
 def register(user: UserCreate, db: Session = Depends(get_db)):
 
     existing_user = (
-        db.query(User)
-        .filter(or_(User.username == user.username, User.email == user.email))
-        .first()
+        db.query(User).filter(or_(User.username == user.username, User.email == user.email)).first()
     )
 
     # Check if user with the same email and username is already exists

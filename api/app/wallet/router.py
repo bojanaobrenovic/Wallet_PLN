@@ -1,4 +1,5 @@
 """Wallet endpoints: show the wallet, add and subtract currency amounts."""
+
 from decimal import Decimal
 from typing import Annotated
 
@@ -8,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
 from app.core.database import get_db
-from app.rates.service import get_exchange_rates
+from app.rates.dependencies import get_rates
+from app.rates.service import ExchangeRates
 from app.swagger_docs import wallet_add, wallet_report, wallet_sub
 from app.wallet.models import SUPPORTED_CURRENCIES, Wallet
 from app.wallet.service import get_balance_report, process_wallet_update
@@ -19,7 +21,9 @@ router = APIRouter(tags=["Wallet"])
 # Return the balance for each currency along with the user's overall total balance
 @router.get("/wallet", **wallet_report)
 def get_wallet_report(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    rates: Annotated[ExchangeRates, Depends(get_rates)],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
 
     user_wallets = db.query(Wallet).filter_by(user_id=current_user.id).all()
@@ -31,8 +35,7 @@ def get_wallet_report(
         }
         return message
 
-    exchange_rates, effective_date = get_exchange_rates()
-    return get_balance_report(user_wallets, exchange_rates, effective_date)
+    return get_balance_report(user_wallets, rates)
 
 
 # Adding amount in different currencies to the wallet
@@ -40,6 +43,7 @@ def get_wallet_report(
 async def add_to_wallet(
     currency: str,
     amount: Annotated[Decimal, Path(decimal_places=2)],
+    rates: Annotated[ExchangeRates, Depends(get_rates)],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -68,14 +72,16 @@ async def add_to_wallet(
 
     # Using an already defined function for updated amount of currency
     return process_wallet_update(
-        db, user_id, currency, wallet, f"Successfully added {amount} {currency}."
+        db, user_id, currency, wallet, f"Successfully added {amount} {currency}.", rates
     )
+
 
 # Substracting amount in different currencies from the wallet
 @router.post("/wallet/sub/{currency}/{amount}", **wallet_sub)
 async def subtract_from_wallet(
     currency: str,
     amount: Annotated[Decimal, Path(decimal_places=2)],
+    rates: Annotated[ExchangeRates, Depends(get_rates)],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -104,5 +110,5 @@ async def subtract_from_wallet(
 
     # Using an already defined function for updated amount of currency
     return process_wallet_update(
-        db, user_id, currency, wallet, f"Successfully subtracted {amount} {currency}."
+        db, user_id, currency, wallet, f"Successfully subtracted {amount} {currency}.", rates
     )

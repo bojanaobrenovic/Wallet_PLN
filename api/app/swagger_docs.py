@@ -194,7 +194,7 @@ wallet_sub = {
     "responses": {
         400: {"description": "Bad Request - Invalid currency or amount"},
         401: {"description": "Could not validate credentials"},
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         },
     },

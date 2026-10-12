@@ -8,7 +8,7 @@ def test_empty_wallet(client, auth_headers):
     assert response.json()["total_in_pln"] == 0
 
 
-def test_example_from_task(client, auth_headers, fake_rates):
+def test_example_from_task(client, auth_headers):
     """100 EUR + 20 USD + 8000 JPY = 425 + 77 + 216 = 718 PLN."""
     client.post("/wallet/add/EUR/100", headers=auth_headers)
     client.post("/wallet/add/USD/20", headers=auth_headers)
@@ -26,7 +26,7 @@ def test_example_from_task(client, auth_headers, fake_rates):
     ]
 
 
-def test_add_to_existing_currency_sums_amounts(client, auth_headers, fake_rates):
+def test_add_to_existing_currency_sums_amounts(client, auth_headers):
     client.post("/wallet/add/EUR/100", headers=auth_headers)
 
     response = client.post("/wallet/add/EUR/50", headers=auth_headers)
@@ -35,7 +35,7 @@ def test_add_to_existing_currency_sums_amounts(client, auth_headers, fake_rates)
     assert response.json()["wallet_report"][0]["amount"] == 150
 
 
-def test_subtract(client, auth_headers, fake_rates):
+def test_subtract(client, auth_headers):
     client.post("/wallet/add/EUR/100", headers=auth_headers)
 
     response = client.post("/wallet/sub/EUR/40", headers=auth_headers)
@@ -44,7 +44,7 @@ def test_subtract(client, auth_headers, fake_rates):
     assert response.json()["wallet_report"][0]["amount"] == 60
 
 
-def test_subtract_more_than_available_fails(client, auth_headers, fake_rates):
+def test_subtract_more_than_available_fails(client, auth_headers):
     client.post("/wallet/add/USD/20", headers=auth_headers)
 
     response = client.post("/wallet/sub/USD/50", headers=auth_headers)
@@ -68,7 +68,7 @@ def test_non_positive_amount_fails(client, auth_headers, amount):
     assert response.status_code == 400
 
 
-def test_me_shows_total_balance(client, auth_headers, fake_rates):
+def test_me_shows_total_balance(client, auth_headers):
     client.post("/wallet/add/EUR/100", headers=auth_headers)
 
     response = client.get("/me", headers=auth_headers)
@@ -77,7 +77,7 @@ def test_me_shows_total_balance(client, auth_headers, fake_rates):
     assert response.json()["balance in PLN"] == 425.0
 
 
-def test_subtract_whole_amount_in_parts(client, auth_headers, fake_rates):
+def test_subtract_whole_amount_in_parts(client, auth_headers):
     """0.3 - 0.1 - 0.2 must leave exactly 0, not 'Insufficient funds'."""
     client.post("/wallet/add/EUR/0.3", headers=auth_headers)
     client.post("/wallet/sub/EUR/0.1", headers=auth_headers)
@@ -86,6 +86,7 @@ def test_subtract_whole_amount_in_parts(client, auth_headers, fake_rates):
 
     assert response.status_code == 200, response.text
     assert client.get("/wallet", headers=auth_headers).json()["total_in_pln"] == 0
+
 
 def test_amount_with_more_than_two_decimals_is_rejected(client, auth_headers):
     response = client.post("/wallet/add/EUR/1.234", headers=auth_headers)

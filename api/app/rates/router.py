@@ -1,27 +1,28 @@
 """Endpoints for exchange rates and supported currencies."""
 
-from fastapi import APIRouter
+from typing import Annotated
 
-from app.rates.service import get_exchange_rates
+from fastapi import APIRouter, Depends
+
+from app.rates.dependencies import get_rates
+from app.rates.service import ExchangeRates
 from app.swagger_docs import currencies_docs, exchange_rates_docs
 
 router = APIRouter(tags=["Exchange rates"])
 
 
-# Returns available exchange rates from NBP
 @router.get("/exchange_rates", **exchange_rates_docs)
-def get_supported_exrate():
-    exchange_rates, effective_date = get_exchange_rates()
+def get_supported_exrate(rates: Annotated[ExchangeRates, Depends(get_rates)]):
     return {
         "message": "Available exchange rate list",
-        "exchange_rates": exchange_rates,
-        "effective_date": effective_date,
+        "exchange_rates": rates.rates,
+        "effective_date": rates.effective_date,
     }
 
 
-# Returns available currencies from API of NBL Bank
 @router.get("/currencies", **currencies_docs)
-def get_currencies():
-    exchange_rates, effective_date = get_exchange_rates()
-    currency_list = list(exchange_rates.keys())
-    return {"available_currencies": currency_list, "effective_date": effective_date}
+def get_currencies(rates: Annotated[ExchangeRates, Depends(get_rates)]):
+    return {
+        "available_currencies": list(rates.rates),
+        "effective_date": rates.effective_date,
+    }

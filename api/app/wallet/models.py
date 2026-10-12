@@ -22,6 +22,7 @@ SUPPORTED_CURRENCIES = [
     "XDR",
 ]
 
+
 class Wallet(Base):
     __tablename__ = "wallets"
 

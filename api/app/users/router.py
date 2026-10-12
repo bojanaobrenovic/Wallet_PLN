@@ -1,10 +1,13 @@
 """Endpoints about the logged-in user."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
-from app.rates.service import get_exchange_rates
+from app.rates.dependencies import get_rates
+from app.rates.service import ExchangeRates
 from app.swagger_docs import user_me_docs
 from app.wallet.service import get_balance_report
 
@@ -13,14 +16,12 @@ router = APIRouter(tags=["User"])
 
 # Return data about the user; also returns the total balance in the wallet (for the user)
 @router.get("/me", **user_me_docs)
-def read_users_me(current_user: User = Depends(get_current_user)):
+def read_users_me(
+    rates: Annotated[ExchangeRates, Depends(get_rates)],
+    current_user: User = Depends(get_current_user),
+):
 
-    exchange_rates, effective_date = get_exchange_rates()
-    report = get_balance_report(
-        user_wallets=current_user.wallets,
-        exchange_rates=exchange_rates,
-        effective_date=effective_date,
-    )
+    report = get_balance_report(current_user.wallets, rates)
 
     return {
         "first_name": current_user.first_name,
