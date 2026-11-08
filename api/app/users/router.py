@@ -28,5 +28,5 @@ def read_users_me(
         "last_name": current_user.last_name,
         "email": current_user.email,
         "username": current_user.username,
-        "balance in PLN": report["total_pln"],
+        "total_pln": report["total_pln"],
     }

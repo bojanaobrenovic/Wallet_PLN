@@ -27,14 +27,6 @@ def get_wallet_report(
 ):
 
     user_wallets = db.query(Wallet).filter_by(user_id=current_user.id).all()
-
-    if not user_wallets:
-        message = {
-            "message": "The user has no money entered in any foreign currency..",
-            "total_in_pln": 0.00,
-        }
-        return message
-
     return get_balance_report(user_wallets, rates)
 
 

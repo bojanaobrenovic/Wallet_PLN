@@ -5,7 +5,11 @@ def test_empty_wallet(client, auth_headers):
     response = client.get("/wallet", headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json()["total_in_pln"] == 0
+    assert response.json() == {
+        "wallet_report": [],
+        "total_pln": 0,
+        "effective_date": "2026-10-08",
+    }
 
 
 def test_example_from_task(client, auth_headers):
@@ -20,9 +24,9 @@ def test_example_from_task(client, auth_headers):
     body = response.json()
     assert body["total_pln"] == 718.0
     assert body["wallet_report"] == [
-        {"currency": "EUR", "value_pln": 425.0},
-        {"currency": "USD", "value_pln": 77.0},
-        {"currency": "JPY", "value_pln": 216.0},
+        {"currency": "EUR", "amount": 100, "value_pln": 425.0},
+        {"currency": "USD", "amount": 20, "value_pln": 77.0},
+        {"currency": "JPY", "amount": 8000, "value_pln": 216.0},
     ]
 
 
@@ -74,7 +78,7 @@ def test_me_shows_total_balance(client, auth_headers):
     response = client.get("/me", headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json()["balance in PLN"] == 425.0
+    assert response.json()["total_pln"] == 425.0
 
 
 def test_subtract_whole_amount_in_parts(client, auth_headers):
@@ -85,7 +89,7 @@ def test_subtract_whole_amount_in_parts(client, auth_headers):
     response = client.post("/wallet/sub/EUR/0.2", headers=auth_headers)
 
     assert response.status_code == 200, response.text
-    assert client.get("/wallet", headers=auth_headers).json()["total_in_pln"] == 0
+    assert client.get("/wallet", headers=auth_headers).json()["total_pln"] == 0
 
 
 def test_amount_with_more_than_two_decimals_is_rejected(client, auth_headers):
