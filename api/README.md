@@ -1,81 +1,118 @@
-# FastAPI Application with Docker - PLN Wallet
+# PLN Wallet API
 
-This project provides a FastAPI application that allows users to manage a wallet with multiple currencies, track exchange rates, and perform conversions between currencies, with Redis integration for data caching and PostgreSQL for persistent storage.
+![CI](https://github.com/bojanaobrenovic/Wallet_PLN/actions/workflows/ci.yml/badge.svg?branch=refactor)
 
-### Core Features
+A REST API that tracks the value of a multi-currency wallet in Polish złoty (PLN),
+using live exchange rates from the [National Bank of Poland (NBP) API](https://api.nbp.pl/en.html).
 
-- **Wallet with multiple currencies**: Each user has one wallet that can hold funds in various currencies.
-- **Currency conversion**ng real-time exchange rates from the National Bank of Poland (NBP) API.
-- **Caching with Redis**: Exchange rates are cached for 24 hours in Redis to reduce requests to the NBP API and improve performance.
-- **Persistent storage**: Wallet data is stored in a PostgreSQL database for reliability. Only the current wallet balance is stored, without history.
+Users register, log in, add or subtract amounts in foreign currencies, and get the
+PLN value of each currency and of the whole wallet, always calculated with the latest
+"ask" rates.
 
-### How It Works
+**Tech stack:** Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy · Redis · JWT · Docker · pytest · GitHub Actions
 
-This application allows users to track the current value of their wallet in different currencies, expressed in Polish złoty (PLN). The exchange rates are fetched from the **National Bank of Poland (NBP) API**.
+---
 
-The application uses the NBP API, with the following endpoint:
-[https://api.nbp.pl/api/exchangerates/tables/c](https://api.nbp.pl/api/exchangerates/tables/c)
+## Example
 
-#### Details:
-- Provides the latest  available exchange rates for various currencies against the Polish złoty (PLN);
-- Returns the "ask" rate for conversions;
-- Available every day
+A wallet with **100 EUR**, **20 USD** and **8000 JPY**, with rates
+1 EUR = 4.25 PLN, 1 USD = 3.85 PLN, 1 JPY = 0.027 PLN:
 
-### API Endpoints
-### 1. **User Endpoints**
+```http
+GET /wallet
+```
+```json
+{
+  "wallet_report": [
+    {"currency": "EUR", "amount": 100.0,  "value_pln": 425.0},
+    {"currency": "USD", "amount": 20.0,   "value_pln": 77.0},
+    {"currency": "JPY", "amount": 8000.0, "value_pln": 216.0}
+  ],
+  "total_pln": 718.0,
+  "effective_date": "2026-11-06"
+}
+```
 
-- **POST /registration**: Registers a new user.
-- **POST /login**: Authenticates a user and returns an access token.
-- **GET /me**: Retrieves the authenticated user's details and wallet balance in PLN.
+## Quick start
 
-### 2. **Currency Endpoints**
+Requirements: **Docker** with Docker Compose.
 
-- **GET /exchange_rates**: Fetches the current exchange rate for a specified currency.
-- **GET /currencies**: Returns a list of all supported currencies.
+```bash
+git clone https://github.com/bojanaobrenovic/Wallet_PLN.git
+cd Wallet_PLN/api
+cp .env.example .env          # then set your own SECRET_KEY (see the comment in the file)
+docker compose up --build
+```
 
-### 3. **Wallet Endpoints**
+The API runs at **http://localhost:8000**, interactive docs at **http://localhost:8000/docs**.
 
-- **GET /wallet**: Returns the current state of the wallet in foreign currencies and the total value in PLN, along with the exchange rate date.
-- **POST /wallet/add/{currency}/{amount}**: Adds a specified amount of a currency to the wallet.
-- **POST /wallet/sub/{currency}/{amount}**: Subtracts a specified amount of a currency from the wallet.
+## API
 
-### **Swagger Documentation**
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/registration` | | Create a user |
+| `POST` | `/login` | | Get a JWT access token |
+| `GET` | `/me` | ✔ | User profile and total wallet value in PLN |
+| `GET` | `/wallet` | ✔ | Wallet composition, PLN value per currency, total in PLN |
+| `POST` | `/wallet/add/{currency}/{amount}` | ✔ | Add an amount of a currency |
+| `POST` | `/wallet/sub/{currency}/{amount}` | ✔ | Subtract an amount of a currency |
+| `GET` | `/currencies` | | Supported currency codes |
+| `GET` | `/exchange_rates` | | Current NBP "ask" rates |
 
-You can explore and test all API endpoints interactively (with authorization) using Swagger at:
+Authenticated endpoints expect the header `Authorization: Bearer <token>`.
+Amounts accept at most two decimal places.
 
-- [http://localhost:8000/docs](http://localhost:8000/docs)
+## Design decisions
 
-# Prerequisites
-- Docker 
-- Docker Compose
-- PostgreSQL >= 12.0
-- Python 3.10
+**Money is never a float.** Amounts are stored as `NUMERIC(18, 2)` in PostgreSQL and
+handled as `Decimal` in Python, with explicit `ROUND_HALF_UP` rounding to whole grosze.
+With floats, `0.30 - 0.10 - 0.20` is not zero, and a user could be told they have
+insufficient funds when they don't.
 
-## Setup
+**Exchange rates are cached, with a fallback.** NBP publishes table C once per working day.
+The API keeps two copies in Redis:
 
-### Step 1:
-First, clone this repository to your local machine.
-#### git clone git@github.com:bojanaobrenovic/Wallet_PLN.git
-#### navgate to the folder api: Wallet_PLN/api
+- a *fresh* copy that expires after one hour, so NBP is called at most once an hour;
+- a *last known good* copy that never expires, used when NBP is unreachable.
 
-### Step 2:
-Create a .env file in the folder Wallet_PLN/api
+A Redis lock (`SET NX`) makes sure that when the cache expires, only one request
+calls NBP even if many arrive at once. NBP calls have a 5-second timeout. If NBP is
+down and nothing was ever cached, the API answers `503 Service Unavailable`.
 
-#### Add theese variables:
-- SECRET_KEY = "your_secret_key" #secret_key = secrets.token_hex(32)
-- ALGORITHM = "HS256"
-- ACCESS_TOKEN_EXPIRE_MINUTES = 30
+**Code is organised by feature, not by layer.** Each feature folder has its own
+router (HTTP), service (logic) and models (tables):
 
-- DATABASE_URL=postgresql://user:password@db/database_name
-- POSTGRES_USER=user
-- POSTGRES_PASSWORD=password
-- POSTGRES_DB=database_name
+```
+api/app/
+├── main.py        # creates the app and plugs in the routers
+├── core/          # config, database session, password hashing and JWT
+├── auth/          # registration, login, current-user dependency
+├── users/         # /me
+├── wallet/        # wallet endpoints and PLN calculations
+└── rates/         # NBP client and Redis cache
+```
 
-### Step 3:
-Build the Docker containers:
-- docker-compose up --build
+## Development
 
-### Notes
-PostgreSQL uses port 5432, and Redis uses port 6379.
-Before starting the Docker containers, check if these ports are already in use on your local machine
+Run the tests and the linter locally (Python 3.12):
 
+```bash
+cd api
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+pytest            # tests use an in-memory SQLite database and fake exchange rates
+ruff check .      # lint (PEP 8, import order, common bugs)
+ruff format .     # format
+```
+
+Tests never call the real NBP API or Redis: exchange rates are replaced with fixed
+values through FastAPI's `dependency_overrides`, and the cache logic is tested
+against `fakeredis`. GitHub Actions runs `ruff` and `pytest` on every push.
+
+## Roadmap
+
+- Async database, HTTP and Redis clients (`asyncpg`, `httpx`, `redis.asyncio`)
+- Database migrations with Alembic instead of `create_all`
+- Pydantic response models, so the OpenAPI docs are generated from the code
