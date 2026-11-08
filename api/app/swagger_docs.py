@@ -11,12 +11,12 @@ user_me_docs = {
         "last_name": "Jonannatan",
         "email": "john.jonannatan@example.com",
         "username": "johnjonannatan",
-        "balance_in_PLN": 527.77
+        "total_pln": 527.77
     }
     """,
     "responses": {
         401: {"description": "Unauthorized - Could not validate credentials"},
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         },
     },
@@ -68,7 +68,7 @@ exchange_rates_docs = {
     }
     """,
     "responses": {
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         }
     },
@@ -88,7 +88,7 @@ currencies_docs = {
     }
     """,
     "responses": {
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         }
     },
@@ -106,18 +106,22 @@ wallet_report = {
     "wallet_report": [
         {
             "currency": "XDR",
-            "value_pln": 9078.92
+            "amount": 1713.0,
+            "value_pln": 9078.9
         },
         {
             "currency": "EUR",
-            "value_pln": 2101.7
+            "amount": 494.52,
+            "value_pln": 2101.71
         },
         {
             "currency": "CZK",
+            "amount": 493.53,
             "value_pln": 83.9
         },
         {
             "currency": "JPY",
+            "amount": 496.0,
             "value_pln": 13.39
         }
     ],
@@ -126,7 +130,7 @@ wallet_report = {
     """,
     "responses": {
         401: {"description": "Unauthorized - Invalid credentials"},
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         },
     },
@@ -151,16 +155,16 @@ wallet_add = {
         {
             "currency": "JPY",
             "amount": 500.0,
-            "IN PLN": 13.39
+            "value_pln": 13.39
         }
     ],
-    "total_in_pln": 11277.91,
-    "effectiveDate": "2025-02-20"}
+    "total_pln": 11277.91,
+    "effective_date": "2025-02-20"}
     """,
     "responses": {
         400: {"description": "Bad Request - Invalid currency or amount"},
         401: {"description": "Could not validate credentials"},
-        500: {
+        503: {
             "description": "NBP API is not available, and Redis cache does not contain exchange rates."
         },
     },
@@ -176,7 +180,7 @@ wallet_sub = {
     
     ### Parameters:
     - **currency** *(str)*: The currency code (e.g., "USD", "EUR").
-    - **amount** *(decimal, max 2 decimal places)*: The amount to add (must be greater than 0).
+    - **amount** *(decimal, max 2 decimal places)*: The amount to subtract (must be greater than 0).
     
     ### Example Response:
     {
@@ -185,11 +189,11 @@ wallet_sub = {
         {
             "currency": "EUR",
             "amount": 23,
-            "IN PLN": 96.68
+            "value_pln: 96.68
         }
     ],
-    "total_in_pln": 11277.91,
-    "effectiveDate": "2025-02-20"}
+    "total_pln": 11277.91,
+    "effective_date": "2025-02-20"}
     """,
     "responses": {
         400: {"description": "Bad Request - Invalid currency or amount"},

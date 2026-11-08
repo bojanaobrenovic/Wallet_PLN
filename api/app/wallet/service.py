@@ -27,7 +27,9 @@ def get_balance_report(user_wallets, rates: ExchangeRates) -> dict:
     for wallet in user_wallets:
         pln_value = to_pln(wallet.amount, rates.rates[wallet.currency])
         total_pln += pln_value
-        report_list.append({"currency": wallet.currency, "amount": wallet.amount,"value_pln": pln_value})
+        report_list.append(
+            {"currency": wallet.currency, "amount": wallet.amount, "value_pln": pln_value}
+        )
 
     return {
         "wallet_report": report_list,
