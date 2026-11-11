@@ -1,13 +1,12 @@
 import os
 
 # Mora PRE importa aplikacije: config.py čita ove promenljive čim se modul učita.
-os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite://"
 os.environ["SECRET_KEY"] = "test-secret"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
@@ -23,29 +22,32 @@ def anyio_backend():
 
 
 @pytest.fixture
-def db_session():
-    """Svaki test dobija svoju, potpuno praznu bazu u memoriji."""
-    engine = create_engine(
-        "sqlite://",
+def client():
+    """TestClient with its own empty in-memory database and fixed exchange rates."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(bind=engine)
-    session = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
-    try:
-        yield session
-    finally:
-        session.close()
-        engine.dispose()
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
+    async def create_tables():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-@pytest.fixture
-def client(db_session):
-    """TestClient with a test database and fixed exchange rates (no NBP, no Redis)."""
-    app.dependency_overrides[get_db] = lambda: db_session
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_rates] = lambda: FAKE_RATES
+
     with TestClient(app) as test_client:
+        # The tables must be created on the same event loop the requests run on
+        test_client.portal.call(create_tables)
         yield test_client
+        test_client.portal.call(engine.dispose)
+
     app.dependency_overrides.clear()
 
 

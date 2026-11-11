@@ -3,104 +3,82 @@
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Path
 
-from app.auth.dependencies import get_current_user
-from app.auth.models import User
-from app.core.database import get_db
-from app.rates.dependencies import get_rates
-from app.rates.service import ExchangeRates
+from app.auth.dependencies import CurrentUser
+from app.core.database import DbSession
+from app.rates.dependencies import Rates
 from app.swagger_docs import wallet_add, wallet_report, wallet_sub
 from app.wallet.models import SUPPORTED_CURRENCIES, Wallet
-from app.wallet.service import get_balance_report, process_wallet_update
+from app.wallet.service import (
+    find_wallet,
+    get_balance_report,
+    get_user_wallets,
+    process_wallet_update,
+)
 
 router = APIRouter(tags=["Wallet"])
+
+# A positive amount with at most two decimal places, taken from the URL
+Amount = Annotated[Decimal, Path(decimal_places=2)]
+
+
+def validate_currency_and_amount(currency: str, amount: Decimal) -> None:
+    """Shared checks for add and subtract."""
+    if currency not in SUPPORTED_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"Currency {currency} is not supported")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0.00")
 
 
 # Return the balance for each currency along with the user's overall total balance
 @router.get("/wallet", **wallet_report)
-def get_wallet_report(
-    rates: Annotated[ExchangeRates, Depends(get_rates)],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-
-    user_wallets = db.query(Wallet).filter_by(user_id=current_user.id).all()
+async def get_wallet_report(rates: Rates, current_user: CurrentUser, db: DbSession):
+    user_wallets = await get_user_wallets(db, current_user.id)
     return get_balance_report(user_wallets, rates)
 
 
 # Adding amount in different currencies to the wallet
 @router.post("/wallet/add/{currency}/{amount}", **wallet_add)
 async def add_to_wallet(
-    currency: str,
-    amount: Annotated[Decimal, Path(decimal_places=2)],
-    rates: Annotated[ExchangeRates, Depends(get_rates)],
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    currency: str, amount: Amount, rates: Rates, current_user: CurrentUser, db: DbSession
 ):
+    validate_currency_and_amount(currency, amount)
 
-    # Checking if the currency is in the list of predefined currencies
-    if currency not in SUPPORTED_CURRENCIES:
-        raise HTTPException(status_code=400, detail=f"Currency {currency} is not supported")
-
-    # The currency amount must be greater than 0.0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0.00")
-
-    # user
-    user_id = current_user.id
-
-    # user's wallet
-    wallet = db.query(Wallet).filter_by(user_id=user_id, currency=currency).first()
-
+    wallet = await find_wallet(db, current_user.id, currency)
     if wallet:
         wallet.amount += amount
     else:
-        wallet = Wallet(user_id=user_id, currency=currency, amount=amount)
+        wallet = Wallet(user_id=current_user.id, currency=currency, amount=amount)
         db.add(wallet)
+    await db.commit()
 
-    db.commit()
-
-    # Using an already defined function for updated amount of currency
-    return process_wallet_update(
-        db, user_id, currency, wallet, f"Successfully added {amount} {currency}.", rates
+    return await process_wallet_update(
+        db, current_user.id, currency, wallet, f"Successfully added {amount} {currency}.", rates
     )
 
 
-# Substracting amount in different currencies from the wallet
+# Subtracting amount in different currencies from the wallet
 @router.post("/wallet/sub/{currency}/{amount}", **wallet_sub)
 async def subtract_from_wallet(
-    currency: str,
-    amount: Annotated[Decimal, Path(decimal_places=2)],
-    rates: Annotated[ExchangeRates, Depends(get_rates)],
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    currency: str, amount: Amount, rates: Rates, current_user: CurrentUser, db: DbSession
 ):
+    validate_currency_and_amount(currency, amount)
 
-    # Checking if the currency is in the list of predefined currencies
-    if currency not in SUPPORTED_CURRENCIES:
-        raise HTTPException(status_code=400, detail=f"Currency {currency} is not supported")
-
-    # The currency amount must be greater than 0.0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0.00")
-
-    user_id = current_user.id
-
-    wallet = db.query(Wallet).filter_by(user_id=user_id, currency=currency).first()
-
-    # Check if there are enough amounts to deduct from the wallet
+    wallet = await find_wallet(db, current_user.id, currency)
     if not wallet or wallet.amount < amount:
         raise HTTPException(status_code=400, detail=f"Insufficient funds in {currency}.")
 
-    # Substrating the amount of the specified currency
     wallet.amount -= amount
     if wallet.amount == 0:
-        db.delete(wallet)
-    db.commit()
+        await db.delete(wallet)
+    await db.commit()
 
-    # Using an already defined function for updated amount of currency
-    return process_wallet_update(
-        db, user_id, currency, wallet, f"Successfully subtracted {amount} {currency}.", rates
+    return await process_wallet_update(
+        db,
+        current_user.id,
+        currency,
+        wallet,
+        f"Successfully subtracted {amount} {currency}.",
+        rates,
     )

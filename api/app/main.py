@@ -1,5 +1,7 @@
 """Application entry point: creates the FastAPI app and plugs in the feature routers."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
@@ -9,7 +11,18 @@ from app.rates.router import router as rates_router
 from app.users.router import router as users_router
 from app.wallet.router import router as wallet_router
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once when the server starts (not on import!)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # Runs once when the server stops
+    await engine.dispose()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # Settings for swagger documentation
@@ -39,12 +52,9 @@ app.include_router(users_router)
 app.include_router(wallet_router)
 app.include_router(rates_router)
 
-# Creating tables in the database
-Base.metadata.create_all(bind=engine)
-
 
 # Check if the app is running
 @app.get("/", summary="Check if the application is running")
-def read_root():
+async def read_root():
     """Checking if the application is runnig."""
     return {"message": "Welcome to PLN Wallet API."}

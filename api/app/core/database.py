@@ -1,22 +1,27 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+"""Async database engine and the DbSession dependency."""
+
+from collections.abc import AsyncIterator
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from .config import DATABASE_URL
 
-# Connection to the database
-engine = create_engine(DATABASE_URL)
+engine = create_async_engine(DATABASE_URL)
 
-# Session
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# expire_on_commit=False: objects stay readable after commit without another DB round trip
+SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 Base = declarative_base()
 
 
-def get_db():
-    """FastAPI dependency - daje DB sesiju po requestu, uvek je zatvara na kraju."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency: one DB session per request, always closed at the end."""
+    async with SessionLocal() as session:
+        yield session
+
+
+# Short name for endpoint parameters: `db: DbSession`
+DbSession = Annotated[AsyncSession, Depends(get_db)]

@@ -1,29 +1,32 @@
 """Endpoints for user registration and login."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+import asyncio
+
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.auth.schemas import Token, UserCreate, UserLogin
-from app.core.database import get_db
+from app.core.database import DbSession
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.swagger_docs import login_docs, registration_docs
 
 router = APIRouter(tags=["Auth"])
 
 
-def get_user(db: Session, username: str):
+async def get_user(db: AsyncSession, username: str) -> User | None:
     """Retrieves the user from the database based on the username."""
-    return db.query(User).filter(User.username == username).first()
+    result = await db.execute(select(User).where(User.username == username))
+    return result.scalar_one_or_none()
 
 
 @router.post("/registration", **registration_docs)
-def register(user: UserCreate, db: Session = Depends(get_db)):
-
-    existing_user = (
-        db.query(User).filter(or_(User.username == user.username, User.email == user.email)).first()
+async def register(user: UserCreate, db: DbSession):
+    result = await db.execute(
+        select(User).where(or_(User.username == user.username, User.email == user.email))
     )
+    existing_user = result.scalars().first()
 
     # Check if user with the same email and username is already exists
     if existing_user:
@@ -32,18 +35,19 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         if existing_user.email == user.email:
             raise HTTPException(status_code=400, detail="Email already exists")
 
-    # Create a new user
+    # bcrypt is slow on purpose (pure CPU work) - run it in a separate thread
+    # so it does not block every other request while it hashes
+    password_hash = await asyncio.to_thread(get_password_hash, user.password)
+
     new_user = User(
         first_name=user.first_name,
         last_name=user.last_name,
         email=user.email,
         username=user.username,
-        password_hash=get_password_hash(user.password),  # Save a hashed password
+        password_hash=password_hash,
     )
-
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
 
     return {
         "message": "User successfully registered",
@@ -53,16 +57,17 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token, **login_docs)
-def login_for_access_token(form_data: UserLogin, db: Session = Depends(get_db)):
-
-    user = get_user(db, form_data.username)
-    if not user or not verify_password(form_data.password, user.password_hash):
+async def login_for_access_token(form_data: UserLogin, db: DbSession):
+    user = await get_user(db, form_data.username)
+    password_ok = user is not None and await asyncio.to_thread(
+        verify_password, form_data.password, user.password_hash
+    )
+    if not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create access token
     access_token = create_access_token(data={"sub": form_data.username})
     return {"access_token": access_token, "token_type": "bearer"}

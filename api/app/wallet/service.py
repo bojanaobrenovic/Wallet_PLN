@@ -1,8 +1,10 @@
 """Business logic for the wallet: PLN balance reports."""
 
+from collections.abc import Sequence
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rates.service import ExchangeRates
 from app.wallet.models import Wallet
@@ -15,7 +17,21 @@ def to_pln(amount: Decimal, rate: Decimal) -> Decimal:
     return (amount * rate).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
-def get_balance_report(user_wallets, rates: ExchangeRates) -> dict:
+async def get_user_wallets(db: AsyncSession, user_id: int) -> Sequence[Wallet]:
+    """All wallet rows (one per currency) of a user."""
+    result = await db.execute(select(Wallet).where(Wallet.user_id == user_id))
+    return result.scalars().all()
+
+
+async def find_wallet(db: AsyncSession, user_id: int, currency: str) -> Wallet | None:
+    """The user's wallet row for one currency, or None if they don't hold it."""
+    result = await db.execute(
+        select(Wallet).where(Wallet.user_id == user_id, Wallet.currency == currency)
+    )
+    return result.scalar_one_or_none()
+
+
+def get_balance_report(user_wallets: Sequence[Wallet], rates: ExchangeRates) -> dict:
     """Creates a report of the user's balance.
 
     The report contains the balance for each currency expressed in PLN,
@@ -38,8 +54,8 @@ def get_balance_report(user_wallets, rates: ExchangeRates) -> dict:
     }
 
 
-def process_wallet_update(
-    db: Session,
+async def process_wallet_update(
+    db: AsyncSession,
     user_id: int,
     currency: str,
     wallet: Wallet,
@@ -59,7 +75,7 @@ def process_wallet_update(
         }
     ]
 
-    all_wallets = db.query(Wallet).filter_by(user_id=user_id).all()
+    all_wallets = await get_user_wallets(db, user_id)
     total_in_pln = sum(
         (to_pln(w.amount, rates.rates[w.currency]) for w in all_wallets),
         Decimal("0"),

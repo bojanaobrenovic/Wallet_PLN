@@ -28,3 +28,7 @@ async def get_rates(
                 f"Please try again later or contact {SUPPORT_EMAIL}."
             ),
         ) from err
+
+
+# Short name for endpoint parameters: `rates: Rates`
+Rates = Annotated[ExchangeRates, Depends(get_rates)]

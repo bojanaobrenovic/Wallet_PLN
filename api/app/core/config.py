@@ -14,7 +14,9 @@ def _require_env(name: str) -> str:
 
 
 # --- Database ---
-DATABASE_URL = _require_env("DATABASE_URL")
+# The app talks to Postgres through the async driver asyncpg,
+# so "postgresql://..." from .env becomes "postgresql+asyncpg://..."
+DATABASE_URL = _require_env("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://", 1)
 
 # --- Authentication ---
 SECRET_KEY = _require_env("SECRET_KEY")
