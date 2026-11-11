@@ -11,13 +11,15 @@ user_me_docs = {
         "last_name": "Jonannatan",
         "email": "john.jonannatan@example.com",
         "username": "johnjonannatan",
-        "balance_in_PLN": 527.77
+        "total_pln": 527.77
     }
     """,
     "responses": {
         401: {"description": "Unauthorized - Could not validate credentials"},
-        500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}
-    }
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        },
+    },
 }
 
 login_docs = {
@@ -25,9 +27,8 @@ login_docs = {
     "description": """
     This endpoint allows users to log in by providing their username and password.
     If the credentials are valid, the API returns a **JWT access token** that can be used for authenticated requests.""",
-
-    "responses": {
-        401: {"description": "Unauthorized - Invalid credentials"}}}
+    "responses": {401: {"description": "Unauthorized - Invalid credentials"}},
+}
 
 # swagger_docs.py
 
@@ -45,9 +46,7 @@ registration_docs = {
         "username": "johndoe"
     },
     """,
-    "responses": {
-        400: {"description": "Bad Request - Username or Email already exists"}
-    }
+    "responses": {400: {"description": "Bad Request - Username or Email already exists"}},
 }
 
 exchange_rates_docs = {
@@ -69,13 +68,15 @@ exchange_rates_docs = {
     }
     """,
     "responses": {
-        500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}
-    }
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        }
+    },
 }
 
 currencies_docs = {
-    "summary":"Returns available currencies from API of NBL Bank",
-    "description":"""
+    "summary": "Returns available currencies from API of NBL Bank",
+    "description": """
     This endpoint provides a list of all supported currency codes for which exchange rates
     are available. The data is retrieved from the Polish National Bank (NBP) and includes
     the effective date of the rates.
@@ -86,16 +87,17 @@ currencies_docs = {
         "effective_date": "2025-02-24"
     }
     """,
-    "responses":{
-         500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}}
+    "responses": {
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        }
+    },
 }
 
 
-
 wallet_report = {
-    "summary":"Returns the current wallet composition, the PLN value for each currency, and the total PLN value",
-    "description":
-    """
+    "summary": "Returns the current wallet composition, the PLN value for each currency, and the total PLN value",
+    "description": """
     This endpoint returns a report containing only the currencies the user holds, their equivalent value in PLN,
     and the total balance of all currencies converted to PLN. The exchange rates are fetched from the Polish National Bank (NBP).
     
@@ -104,41 +106,47 @@ wallet_report = {
     "wallet_report": [
         {
             "currency": "XDR",
-            "value_pln": 9078.92
+            "amount": 1713.0,
+            "value_pln": 9078.9
         },
         {
             "currency": "EUR",
-            "value_pln": 2101.7
+            "amount": 494.52,
+            "value_pln": 2101.71
         },
         {
             "currency": "CZK",
+            "amount": 493.53,
             "value_pln": 83.9
         },
         {
             "currency": "JPY",
+            "amount": 496.0,
             "value_pln": 13.39
         }
     ],
     "total_pln": 11277.91,
     "effective_date": "2025-02-24"}
     """,
-    "responses":{
+    "responses": {
         401: {"description": "Unauthorized - Invalid credentials"},
-        500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}}
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        },
+    },
 }
 
 
 wallet_add = {
-    "summary":"Adds a specified amount of a currency to the wallet",
-    "description":
-    """
+    "summary": "Adds a specified amount of a currency to the wallet",
+    "description": """
     This endpoint allows users to add a given amount of a specific currency to their wallet.
     If the currency already exists in the wallet, the amount is increased. If it does not exist,
     a new entry is created.
     
     ### Parameters:
     - **currency** *(str)*: The currency code (e.g., "USD", "EUR").
-    - **amount** *(float)*: The amount to add (must be greater than 0).
+    - **amount** *(decimal, max 2 decimal places)*: The amount to add (must be greater than 0).
     
     ### Example Response:
     {
@@ -147,29 +155,32 @@ wallet_add = {
         {
             "currency": "JPY",
             "amount": 500.0,
-            "IN PLN": 13.39
+            "value_pln": 13.39
         }
     ],
-    "total_in_pln": 11277.91,
-    "effectiveDate": "2025-02-20"}
+    "total_pln": 11277.91,
+    "effective_date": "2025-02-20"}
     """,
-    "responses":{
+    "responses": {
         400: {"description": "Bad Request - Invalid currency or amount"},
         401: {"description": "Could not validate credentials"},
-        500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}}}
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        },
+    },
+}
 
 
 wallet_sub = {
-    "summary":"Subtracts a specified amount of a currency from the wallet",
-    "description":
-    """
+    "summary": "Subtracts a specified amount of a currency from the wallet",
+    "description": """
     This endpoint allows users to subtract a given amount of a specific currency from their wallet.
     It checks if the user has sufficient funds before proceeding. If the deduction results in a zero balance
     for that currency, the currency entry is removed from the wallet.
     
     ### Parameters:
     - **currency** *(str)*: The currency code (e.g., "USD", "EUR").
-    - **amount** *(float)*: The amount to add (must be greater than 0).
+    - **amount** *(decimal, max 2 decimal places)*: The amount to subtract (must be greater than 0).
     
     ### Example Response:
     {
@@ -178,13 +189,17 @@ wallet_sub = {
         {
             "currency": "EUR",
             "amount": 23,
-            "IN PLN": 96.68
+            "value_pln: 96.68
         }
     ],
-    "total_in_pln": 11277.91,
-    "effectiveDate": "2025-02-20"}
+    "total_pln": 11277.91,
+    "effective_date": "2025-02-20"}
     """,
-    "responses":{
+    "responses": {
         400: {"description": "Bad Request - Invalid currency or amount"},
         401: {"description": "Could not validate credentials"},
-        500: {"description": "NBP API is not available, and Redis cache does not contain exchange rates."}}}
+        503: {
+            "description": "NBP API is not available, and Redis cache does not contain exchange rates."
+        },
+    },
+}

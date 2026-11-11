@@ -1,0 +1,35 @@
+# Ignore the virtual environment
+.venv
+venv/
+*_venv/
+wallet_api_refactor/
+pyvenv.cfg
+
+
+.env
+*.env
+!.env.example
+
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# R (RStudio)
+.Rhistory
+
+*.db
