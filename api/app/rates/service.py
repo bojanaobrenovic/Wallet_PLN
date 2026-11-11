@@ -60,6 +60,7 @@ async def fetch_from_nbp() -> ExchangeRates:
         effective_date=table["effectiveDate"],
     )
 
+
 class ExchangeRateService:
     """Returns exchange rates, calling NBP at most once per cache period.
 

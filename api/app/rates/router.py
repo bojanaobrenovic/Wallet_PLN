@@ -13,7 +13,7 @@ router = APIRouter(tags=["Exchange rates"])
 
 @router.get("/exchange_rates", **exchange_rates_docs)
 async def get_supported_exrate(rates: Annotated[ExchangeRates, Depends(get_rates)]):
-     return {
+    return {
         "message": "Available exchange rate list",
         "exchange_rates": rates.rates,
         "effective_date": rates.effective_date,
