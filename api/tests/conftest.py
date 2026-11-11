@@ -17,6 +17,12 @@ from tests.utils import FAKE_RATES, register_and_login
 
 
 @pytest.fixture
+def anyio_backend():
+    """Async tests (marked with @pytest.mark.anyio) run on asyncio."""
+    return "asyncio"
+
+
+@pytest.fixture
 def db_session():
     """Svaki test dobija svoju, potpuno praznu bazu u memoriji."""
     engine = create_engine(

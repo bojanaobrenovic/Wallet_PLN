@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 import fakeredis
+import httpx
 import pytest
-import requests
 
 from app.main import app
 from app.rates.dependencies import get_rate_service, get_rates
@@ -28,63 +28,68 @@ class FakeNbp:
         self.is_down = is_down
         self.calls = 0
 
-    def __call__(self):
+    async def __call__(self):
         self.calls += 1
         if self.is_down:
-            raise requests.ConnectionError("NBP is down")
+            raise httpx.ConnectError("NBP is down")
         return self.rates
 
 
 @pytest.fixture
 def cache():
-    return fakeredis.FakeRedis(decode_responses=True)
+    return fakeredis.FakeAsyncRedis(decode_responses=True)
 
 
 # --- ExchangeRateService ---------------------------------------------------
 
 
-def test_first_call_downloads_from_nbp_and_caches(cache):
+@pytest.mark.anyio
+async def test_first_call_downloads_from_nbp_and_caches(cache):
     nbp = FakeNbp()
     service = ExchangeRateService(cache, fetch=nbp)
 
-    assert service.get_rates() == NBP_RATES
+    assert await service.get_rates() == NBP_RATES
     assert nbp.calls == 1
-    assert cache.ttl(FRESH_KEY) > 0  # fresh copy expires
-    assert cache.ttl(LAST_GOOD_KEY) == -1  # fallback copy never expires
+    assert await cache.ttl(FRESH_KEY) > 0  # fresh copy expires
+    assert await cache.ttl(LAST_GOOD_KEY) == -1  # fallback copy never expires
 
 
-def test_second_call_uses_cache_without_calling_nbp(cache):
+@pytest.mark.anyio
+async def test_second_call_uses_cache_without_calling_nbp(cache):
     nbp = FakeNbp()
     service = ExchangeRateService(cache, fetch=nbp)
 
-    service.get_rates()
-    service.get_rates()
-    service.get_rates()
+    await service.get_rates()
+    await service.get_rates()
+    await service.get_rates()
 
     assert nbp.calls == 1
 
 
-def test_nbp_down_returns_last_good_rates(cache):
-    cache.set(LAST_GOOD_KEY, OLD_RATES.to_json())
+@pytest.mark.anyio
+async def test_nbp_down_returns_last_good_rates(cache):
+    await cache.set(LAST_GOOD_KEY, OLD_RATES.to_json())
     service = ExchangeRateService(cache, fetch=FakeNbp(is_down=True))
 
-    assert service.get_rates() == OLD_RATES
+    assert await service.get_rates() == OLD_RATES
 
 
-def test_nbp_down_and_empty_cache_raises(cache):
+@pytest.mark.anyio
+async def test_nbp_down_and_empty_cache_raises(cache):
     service = ExchangeRateService(cache, fetch=FakeNbp(is_down=True))
 
     with pytest.raises(RatesUnavailableError):
-        service.get_rates()
+        await service.get_rates()
 
 
-def test_while_another_request_refreshes_nbp_is_not_called_again(cache):
-    cache.set(LAST_GOOD_KEY, OLD_RATES.to_json())
-    cache.set(LOCK_KEY, "1")  # someone else is already downloading
+@pytest.mark.anyio
+async def test_while_another_request_refreshes_nbp_is_not_called_again(cache):
+    await cache.set(LAST_GOOD_KEY, OLD_RATES.to_json())
+    await cache.set(LOCK_KEY, "1")  # someone else is already downloading
     nbp = FakeNbp()
     service = ExchangeRateService(cache, fetch=nbp)
 
-    assert service.get_rates() == OLD_RATES
+    assert await service.get_rates() == OLD_RATES
     assert nbp.calls == 0
 
 

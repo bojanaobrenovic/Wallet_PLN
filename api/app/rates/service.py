@@ -2,12 +2,12 @@
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
-import redis
-import requests
+import httpx
+from redis.asyncio import Redis
 
 from app.core.config import CACHE_TTL_SECONDS, NBP_API_URL
 
@@ -49,16 +49,16 @@ class ExchangeRates:
         )
 
 
-def fetch_from_nbp() -> ExchangeRates:
+async def fetch_from_nbp() -> ExchangeRates:
     """Downloads table C (buy/sell prices) from the NBP API."""
-    response = requests.get(NBP_API_URL, timeout=NBP_TIMEOUT_SECONDS)
+    async with httpx.AsyncClient(timeout=NBP_TIMEOUT_SECONDS) as client:
+        response = await client.get(NBP_API_URL)
     response.raise_for_status()
     table = response.json()[0]
     return ExchangeRates(
         rates={rate["code"]: Decimal(str(rate["ask"])) for rate in table["rates"]},
         effective_date=table["effectiveDate"],
     )
-
 
 class ExchangeRateService:
     """Returns exchange rates, calling NBP at most once per cache period.
@@ -71,43 +71,43 @@ class ExchangeRateService:
 
     def __init__(
         self,
-        cache: redis.Redis,
-        fetch: Callable[[], ExchangeRates] = fetch_from_nbp,
+        cache: Redis,
+        fetch: Callable[[], Awaitable[ExchangeRates]] = fetch_from_nbp,
         ttl_seconds: int = CACHE_TTL_SECONDS,
     ):
         self.cache = cache
         self.fetch = fetch
         self.ttl_seconds = ttl_seconds
 
-    def get_rates(self) -> ExchangeRates:
-        fresh = self.cache.get(FRESH_KEY)
+    async def get_rates(self) -> ExchangeRates:
+        fresh = await self.cache.get(FRESH_KEY)
         if fresh:
             return ExchangeRates.from_json(fresh)
 
         # SET NX = "set only if it does not exist": exactly one request gets the lock
-        got_lock = self.cache.set(LOCK_KEY, "1", nx=True, ex=LOCK_SECONDS)
+        got_lock = await self.cache.set(LOCK_KEY, "1", nx=True, ex=LOCK_SECONDS)
         if not got_lock:
             # Another request is already refreshing - don't hit NBP a second time
-            last_good = self.cache.get(LAST_GOOD_KEY)
+            last_good = await self.cache.get(LAST_GOOD_KEY)
             if last_good:
                 return ExchangeRates.from_json(last_good)
 
         try:
-            rates = self.fetch()
-        except (requests.RequestException, KeyError, IndexError, ValueError) as err:
+            rates = await self.fetch()
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as err:
             logger.warning("NBP API is unavailable: %s", err)
-            return self._last_good_or_raise(err)
+            return await self._last_good_or_raise(err)
         else:
             payload = rates.to_json()
-            self.cache.set(FRESH_KEY, payload, ex=self.ttl_seconds)
-            self.cache.set(LAST_GOOD_KEY, payload)
+            await self.cache.set(FRESH_KEY, payload, ex=self.ttl_seconds)
+            await self.cache.set(LAST_GOOD_KEY, payload)
             return rates
         finally:
             if got_lock:
-                self.cache.delete(LOCK_KEY)
+                await self.cache.delete(LOCK_KEY)
 
-    def _last_good_or_raise(self, err: Exception) -> ExchangeRates:
-        last_good = self.cache.get(LAST_GOOD_KEY)
+    async def _last_good_or_raise(self, err: Exception) -> ExchangeRates:
+        last_good = await self.cache.get(LAST_GOOD_KEY)
         if last_good:
             return ExchangeRates.from_json(last_good)
         raise RatesUnavailableError("NBP API is unavailable and no rates are cached") from err
